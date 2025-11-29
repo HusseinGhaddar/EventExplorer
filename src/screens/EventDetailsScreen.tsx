@@ -1,270 +1,438 @@
-import React, {useMemo} from 'react';
+// src/screens/EventDetailsScreen.tsx
+import React, {ReactNode, useCallback, useMemo} from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Linking,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
   View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  ActivityIndicator,
+  TouchableOpacity,
+  Linking,
+  Image,
 } from 'react-native';
-import {RouteProp, useRoute} from '@react-navigation/native';
-import MapView, {Marker, PROVIDER_GOOGLE} from 'react-native-maps';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import {RouteProp, useRoute} from '@react-navigation/native';
+import {GOOGLE_MAPS_API_KEY} from '@env';
 import {useGetEventByIdQuery} from '../api/ticketmasterApi';
-import type {RootStackParamList} from '../navigation/RootNavigator';
-import {useAppDispatch, useAppSelector} from '../store/hooks';
-import {toggleFavorite} from '../store/slices/favoritesSlice';
-import {useThemeColors} from '../theme/colors';
+import type {EventVenue, PriceRange} from '../types/events';
 
-type Route = RouteProp<RootStackParamList, 'EventDetails'>;
+type RootStackParamList = {
+  EventDetails: {eventId: string};
+};
 
-const EventDetailsScreen = () => {
-  const colors = useThemeColors();
-  const route = useRoute<Route>();
-  const dispatch = useAppDispatch();
-  const favorites = useAppSelector(state => state.favorites.entities);
-  const {eventId, event: initialEvent} = route.params;
-  const {data, isFetching, error, isError} = useGetEventByIdQuery(eventId, {
-    skip: !eventId,
-  });
-  const event = data ?? initialEvent;
-  const isFavorite = Boolean(event && favorites[event.id]);
+type EventDetailsRouteProp = RouteProp<RootStackParamList, 'EventDetails'>;
 
-  const region = useMemo(() => {
-    if (!event?.venue?.latitude || !event.venue.longitude) {
-      return undefined;
+const GOOGLE_STATIC_MAP_KEY = (GOOGLE_MAPS_API_KEY || '').trim();
+
+const formatAddress = (venue?: EventVenue) => {
+  if (!venue) {
+    return undefined;
+  }
+  return [venue.address, venue.city, venue.state, venue.country]
+    .filter(Boolean)
+    .join(', ');
+};
+
+const toCurrency = (value?: number, currency?: string) => {
+  if (value == null) {
+    return undefined;
+  }
+
+  if (!currency) {
+    return value.toString();
+  }
+
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency,
+      maximumFractionDigits: value % 1 === 0 ? 0 : 2,
+    }).format(value);
+  } catch {
+    return `${value} ${currency}`;
+  }
+};
+
+const formatPriceRange = (range: PriceRange) => {
+  const min = toCurrency(range.min, range.currency);
+  const max = toCurrency(range.max, range.currency);
+
+  if (min && max) {
+    return min === max ? min : `${min} - ${max}`;
+  }
+
+  return min ?? max ?? 'Pricing TBD';
+};
+
+interface InfoRowProps {
+  icon: string;
+  label: string;
+  value?: ReactNode;
+}
+
+const InfoRow: React.FC<InfoRowProps> = ({icon, label, value}) => {
+  if (!value) {
+    return null;
+  }
+
+  return (
+    <View style={styles.infoRow}>
+      <MaterialIcons name={icon} size={18} color="#4b5563" style={styles.infoIcon} />
+      <View style={styles.infoTextContainer}>
+        <Text style={styles.infoLabel}>{label}</Text>
+        <Text style={styles.infoValue}>{value}</Text>
+      </View>
+    </View>
+  );
+};
+
+const EventDetailsScreen: React.FC = () => {
+  const route = useRoute<EventDetailsRouteProp>();
+  const {eventId} = route.params;
+
+  const {data, isLoading, isError, refetch} = useGetEventByIdQuery(eventId);
+
+  const openTickets = useCallback(() => {
+    if (data?.ticketUrl) {
+      Linking.openURL(data.ticketUrl);
     }
+  }, [data?.ticketUrl]);
 
-    return {
-      latitude: event.venue.latitude,
-      longitude: event.venue.longitude,
-      latitudeDelta: 0.05,
-      longitudeDelta: 0.05,
-    };
-  }, [event?.venue?.latitude, event?.venue?.longitude]);
-
-  const handleToggleFavorite = () => {
-    if (event) {
-      dispatch(toggleFavorite(event));
-    }
-  };
-
-  const handleOpenTickets = async () => {
-    if (!event?.ticketUrl) {
+  const openInMaps = useCallback(() => {
+    const venue: EventVenue | undefined = data?.venue;
+    if (!venue) {
       return;
     }
 
-    const supported = await Linking.canOpenURL(event.ticketUrl);
-    if (supported) {
-      Linking.openURL(event.ticketUrl);
-    } else {
-      Alert.alert('Unable to open link', 'This ticket URL cannot be opened on your device.');
+    const {latitude, longitude, address, city} = venue;
+
+    if (latitude && longitude) {
+      const url = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+      Linking.openURL(url);
+      return;
     }
-  };
 
-  if (!event && isFetching) {
+    if (address || city) {
+      const query = encodeURIComponent(
+        `${address ?? ''} ${city ?? ''}`.trim(),
+      );
+      const url = `https://www.google.com/maps/search/?api=1&query=${query}`;
+      Linking.openURL(url);
+    }
+  }, [data?.venue]);
+
+  const venue = data?.venue;
+  const locationLine = formatAddress(venue);
+  const hasCoordinates =
+    typeof venue?.latitude === 'number' && typeof venue?.longitude === 'number';
+  const showMapSection = Boolean(venue && hasCoordinates);
+
+  const mapPreviewUrl = useMemo(() => {
+    if (!hasCoordinates || !GOOGLE_STATIC_MAP_KEY) {
+      return undefined;
+    }
+
+    const lat = venue!.latitude;
+    const lng = venue!.longitude;
+    const size = '640x320';
+    const marker = `color:red%7C${lat},${lng}`;
+    return `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=14&size=${size}&maptype=roadmap&markers=${marker}&key=${GOOGLE_STATIC_MAP_KEY}`;
+  }, [hasCoordinates, venue]);
+
+  const descriptionText = data?.description?.trim();
+  const safeDescription =
+    descriptionText && descriptionText.length > 0 ? descriptionText : 'No description available.';
+  const additionalInfoRaw = data?.additionalInfo?.trim();
+  const additionalInfoDisplay =
+    additionalInfoRaw && additionalInfoRaw.length > 0 ? additionalInfoRaw : undefined;
+
+  if (isLoading) {
     return (
-      <View style={[styles.center, {backgroundColor: colors.background}]}>
-        <ActivityIndicator color={colors.primary} />
+      <View style={styles.center}>
+        <ActivityIndicator />
+        <Text style={styles.subtitle}>Loading event...</Text>
       </View>
     );
   }
 
-  if (!event) {
+  if (isError || !data) {
     return (
-      <View style={[styles.center, {backgroundColor: colors.background, paddingHorizontal: 24}]}>
-        <MaterialIcons name="error-outline" size={36} color={colors.danger} />
-        <Text style={[styles.errorText, {color: colors.text, marginTop: 16}]}>
-          {isError ? 'Unable to load event details.' : 'Event details are unavailable.'}
-        </Text>
-        {error && 'data' in error ? (
-          <Text style={{color: colors.muted, textAlign: 'center', marginTop: 8}}>
-            {error.data?.message ?? JSON.stringify(error.data)}
-          </Text>
-        ) : null}
+      <View style={styles.center}>
+        <Text style={styles.title}>Failed to load event</Text>
+        <TouchableOpacity onPress={refetch} style={styles.primaryButton}>
+          <Text style={styles.primaryButtonText}>Retry</Text>
+        </TouchableOpacity>
       </View>
     );
   }
-
-  const venueLine =
-    [event.venue?.name, event.venue?.city, event.venue?.state].filter(Boolean).join(' • ') ||
-    'Venue TBA';
 
   return (
-    <ScrollView style={{flex: 1, backgroundColor: colors.background}}>
-      {event.imageUrl ? (
-        <Image source={{uri: event.imageUrl}} style={styles.headerImage} resizeMode="cover" />
+    <ScrollView contentContainerStyle={styles.container}>
+      {data.imageUrl ? (
+        <Image
+          source={{uri: data.imageUrl}}
+          style={styles.heroImage}
+          resizeMode="cover"
+          accessibilityRole="image"
+          accessibilityLabel={`${data.name} poster`}
+        />
       ) : null}
-      <View style={[styles.content, {backgroundColor: colors.background}]}>
-        <View style={styles.headerRow}>
-          <Text style={[styles.title, {color: colors.text}]}>{event.name}</Text>
-          <Pressable style={styles.favoriteButton} onPress={handleToggleFavorite}>
-            <MaterialIcons
-              name={isFavorite ? 'favorite' : 'favorite-outline'}
-              size={26}
-              color={isFavorite ? colors.primary : colors.muted}
-            />
-          </Pressable>
+
+      <Text style={styles.title}>{data.name}</Text>
+      <Text style={styles.subtitle}>{data.formattedDate}</Text>
+      {data.category ? (
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>{data.category}</Text>
         </View>
-        <Text style={[styles.date, {color: colors.primary}]}>{event.formattedDate}</Text>
-        <Text style={[styles.venue, {color: colors.muted}]}>{venueLine}</Text>
-        {event.category ? (
-          <View style={[styles.badge, {backgroundColor: `${colors.primary}15`}]} testID="category-badge">
-            <Text style={[styles.badgeText, {color: colors.primary}]}>{event.category}</Text>
-          </View>
+      ) : null}
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Event details</Text>
+        <InfoRow icon="schedule" label="Date & time" value={data.formattedDate} />
+        <InfoRow icon="confirmation-number" label="Tickets" value={data.ticketUrl ? 'Available online' : 'Check venue website'} />
+        {venue ? (
+          <>
+            <InfoRow icon="festival" label="Venue" value={venue.name ?? 'Venue TBA'} />
+            <InfoRow icon="place" label="Location" value={locationLine ?? 'Location to be announced'} />
+          </>
+        ) : (
+          <InfoRow icon="place" label="Location" value="Location to be announced" />
+        )}
+        {venue ? (
+          <TouchableOpacity onPress={openInMaps} style={styles.secondaryButton} accessibilityRole="button">
+            <Text style={styles.secondaryButtonText}>Open in Google Maps</Text>
+          </TouchableOpacity>
         ) : null}
-        {event.description ? (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, {color: colors.text}]}>About this event</Text>
-            <Text style={[styles.paragraph, {color: colors.muted}]}>{event.description}</Text>
-          </View>
-        ) : null}
-        {event.additionalInfo ? (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, {color: colors.text}]}>Please note</Text>
-            <Text style={[styles.paragraph, {color: colors.muted}]}>{event.additionalInfo}</Text>
-          </View>
-        ) : null}
-        {event.priceRanges && event.priceRanges.length > 0 ? (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, {color: colors.text}]}>Price range</Text>
-            {event.priceRanges.map((range, index) => (
-              <Text key={`${range.type}-${index}`} style={[styles.paragraph, {color: colors.muted}]}>
-                {range.type ? `${range.type}: ` : ''}
-                {typeof range.min === 'number'
-                  ? range.min.toLocaleString(undefined, {
-                      style: 'currency',
-                      currency: range.currency ?? 'USD',
-                    })
-                  : 'TBD'}
-                {typeof range.max === 'number' && range.max !== range.min
-                  ? ` - ${range.max.toLocaleString(undefined, {
-                      style: 'currency',
-                      currency: range.currency ?? 'USD',
-                    })}`
-                  : ''}
-              </Text>
-            ))}
-          </View>
-        ) : null}
-        {event.ticketUrl ? (
-          <Pressable style={[styles.primaryButton, {backgroundColor: colors.primary}]} onPress={handleOpenTickets}>
-            <MaterialIcons name="open-in-new" size={18} color="#fff" />
-            <Text style={styles.primaryButtonText}>Buy tickets</Text>
-          </Pressable>
-        ) : null}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, {color: colors.text}]}>Location</Text>
-          {region ? (
-            <View style={styles.mapContainer}>
-              <MapView
-                style={styles.map}
-                provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
-                initialRegion={region}
-                showsCompass
-                loadingEnabled>
-                <Marker coordinate={region} title={event.venue?.name} description={venueLine} />
-              </MapView>
-            </View>
+      </View>
+
+      {showMapSection && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Getting there</Text>
+          {mapPreviewUrl ? (
+            <TouchableOpacity
+              onPress={openInMaps}
+              activeOpacity={0.85}
+              style={styles.mapPreviewWrapper}
+              accessibilityRole="button"
+              accessibilityLabel="Open location in Google Maps">
+              <Image source={{uri: mapPreviewUrl}} style={styles.mapImage} resizeMode="cover" />
+              <View style={styles.mapOverlay}>
+                <MaterialIcons name="map" size={18} color="#fff" />
+                <Text style={styles.mapOverlayText}>Open interactive map</Text>
+              </View>
+            </TouchableOpacity>
           ) : (
-            <Text style={[styles.paragraph, {color: colors.muted}]}>
-              Location information is not available for this venue yet.
-            </Text>
+            <View style={styles.mapPlaceholder}>
+              <MaterialIcons name="map" size={20} color="#6b7280" />
+              <Text style={styles.mapPlaceholderText}>
+                Add GOOGLE_MAPS_API_KEY (.env) to preview the map here.
+              </Text>
+            </View>
           )}
         </View>
+      )}
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>About this event</Text>
+        <Text style={styles.cardText}>{safeDescription}</Text>
+        {additionalInfoDisplay ? (
+          <View style={styles.additionalInfo}>
+            <Text style={styles.cardSubtitle}>Additional info</Text>
+            <Text style={styles.cardText}>{additionalInfoDisplay}</Text>
+          </View>
+        ) : null}
       </View>
+
+      {data.priceRanges && data.priceRanges.length > 0 ? (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Price ranges</Text>
+          {data.priceRanges.map((range, index) => (
+            <View key={`${range.type ?? 'price'}-${index}`} style={styles.priceRow}>
+              <Text style={styles.priceLabel}>{range.type ?? 'General'}</Text>
+              <Text style={styles.priceValue}>{formatPriceRange(range)}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      {data.ticketUrl && (
+        <TouchableOpacity onPress={openTickets} style={styles.primaryButton} accessibilityRole="button">
+          <Text style={styles.primaryButtonText}>Buy tickets</Text>
+        </TouchableOpacity>
+      )}
     </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
-  headerImage: {
-    width: '100%',
-    height: 240,
+  center: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
   },
-  content: {
+  container: {
     padding: 16,
+    paddingBottom: 32,
   },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+  heroImage: {
+    width: '100%',
+    height: 220,
+    borderRadius: 16,
+    marginBottom: 16,
+    backgroundColor: '#d1d5db',
   },
   title: {
-    flex: 1,
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
+    marginBottom: 4,
   },
-  favoriteButton: {
-    marginLeft: 12,
-  },
-  date: {
-    marginTop: 8,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  venue: {
-    marginTop: 4,
+  subtitle: {
     fontSize: 14,
+    color: '#666',
+    marginBottom: 16,
   },
   badge: {
-    marginTop: 10,
-    paddingHorizontal: 10,
+    alignSelf: 'flex-start',
+    backgroundColor: '#E8F0FF',
+    paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 999,
-    alignSelf: 'flex-start',
+    marginBottom: 16,
   },
   badgeText: {
     fontSize: 12,
     fontWeight: '600',
+    color: '#1F4ED8',
     textTransform: 'uppercase',
   },
-  section: {
-    marginTop: 18,
+  card: {
+    backgroundColor: '#f7f7f8',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
   },
-  sectionTitle: {
+  cardTitle: {
     fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 8,
+    fontWeight: '600',
+    marginBottom: 4,
   },
-  paragraph: {
+  cardSubtitle: {
     fontSize: 14,
-    lineHeight: 20,
+    fontWeight: '600',
+    marginTop: 12,
+    marginBottom: 4,
   },
-  primaryButton: {
+  cardText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginTop: 10,
+  },
+  infoIcon: {
+    marginTop: 2,
+    marginRight: 10,
+  },
+  infoTextContainer: {
+    flex: 1,
+  },
+  infoLabel: {
+    fontSize: 12,
+    textTransform: 'uppercase',
+    color: '#6b7280',
+  },
+  infoValue: {
+    fontSize: 15,
+    color: '#111827',
+    fontWeight: '500',
+  },
+  mapPreviewWrapper: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginTop: 12,
+  },
+  mapImage: {
+    width: '100%',
+    height: 220,
+  },
+  mapOverlay: {
+    position: 'absolute',
+    bottom: 12,
+    left: 12,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 14,
-    marginTop: 24,
+  },
+  mapOverlayText: {
+    color: '#fff',
+    fontSize: 13,
+    marginLeft: 6,
+    fontWeight: '600',
+  },
+  mapPlaceholder: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    padding: 12,
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  mapPlaceholderText: {
+    marginLeft: 8,
+    color: '#4b5563',
+    flex: 1,
+  },
+  primaryButton: {
+    marginTop: 16,
+    backgroundColor: '#007AFF',
+    paddingVertical: 12,
+    borderRadius: 24,
+    alignItems: 'center',
   },
   primaryButtonText: {
     color: '#fff',
     fontWeight: '600',
-    marginLeft: 8,
-  },
-  mapContainer: {
-    width: '100%',
-    height: 220,
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  map: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  errorText: {
     fontSize: 16,
+  },
+  secondaryButton: {
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+    alignSelf: 'flex-start',
+  },
+  secondaryButtonText: {
+    color: '#007AFF',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  additionalInfo: {
+    marginTop: 8,
+  },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  priceLabel: {
+    fontSize: 14,
+    color: '#374151',
+    fontWeight: '500',
+  },
+  priceValue: {
+    fontSize: 14,
+    color: '#111827',
     fontWeight: '600',
-    textAlign: 'center',
   },
 });
 

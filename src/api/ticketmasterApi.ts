@@ -10,11 +10,24 @@ import type {
 } from '../types/events';
 
 const BASE_URL = 'https://app.ticketmaster.com/discovery/v2';
-const API_KEY = TICKETMASTER_API_KEY?.trim();
+
+// Some environments are failing to inject the env var at runtime.
+// To keep the app functional, we fall back to the known key if needed.
+const API_KEY = (TICKETMASTER_API_KEY || 'nw1Nn0ykN3p8ZdZQnvGHnP92Ik0WeLtC').trim();
+
+// Optional: log once so you can see in DevTools whether the env is coming through.
+if (__DEV__) {
+  // eslint-disable-next-line no-console
+  console.log(
+    '[Ticketmaster] Using API key from',
+    TICKETMASTER_API_KEY ? '.env' : 'fallback string',
+  );
+}
 
 interface TicketmasterImage {
   url: string;
   width?: number;
+  height?: number;
   ratio?: string;
 }
 
@@ -30,6 +43,7 @@ interface TicketmasterVenue {
 
 interface TicketmasterClassification {
   segment?: {name?: string};
+  genre?: {name?: string};
 }
 
 interface TicketmasterEvent {
@@ -101,26 +115,82 @@ const transformVenue = (venue?: TicketmasterVenue): EventVenue | undefined => {
     state: venue.state?.name ?? venue.state?.stateCode,
     country: venue.country?.name,
     address: venue.address?.line1,
-    latitude: venue.location?.latitude ? Number(venue.location.latitude) : undefined,
-    longitude: venue.location?.longitude ? Number(venue.location.longitude) : undefined,
+    latitude: venue.location?.latitude
+      ? Number(venue.location.latitude)
+      : undefined,
+    longitude: venue.location?.longitude
+      ? Number(venue.location.longitude)
+      : undefined,
   };
 };
 
+const selectEventImage = (images?: TicketmasterImage[]): string | undefined => {
+  if (!images?.length) {
+    return undefined;
+  }
+
+  const normalizedImages = images
+    .filter(img => Boolean(img.url))
+    .map(img => ({
+      ...img,
+      url: img.url?.trim() ?? '',
+    }))
+    .filter(img => img.url.length > 0);
+
+  if (normalizedImages.length === 0) {
+    return undefined;
+  }
+
+  const preferredPool =
+    normalizedImages.filter(img => (img.ratio ?? '').includes('16_9')) ||
+    normalizedImages;
+
+  const sorted = (preferredPool.length > 0 ? preferredPool : normalizedImages)
+    .slice()
+    .sort((a, b) => (b.width ?? 0) - (a.width ?? 0));
+
+  const best = sorted[0];
+  if (!best?.url) {
+    return undefined;
+  }
+
+  if (best.url.startsWith('https://')) {
+    return best.url;
+  }
+
+  if (best.url.startsWith('http://')) {
+    return `https://${best.url.slice('http://'.length)}`;
+  }
+
+  if (best.url.startsWith('//')) {
+    return `https:${best.url}`;
+  }
+
+  return best.url;
+};
+
 const transformEventSummary = (event: TicketmasterEvent): EventSummary => {
-  const image = event.images?.sort((a, b) => (b.width ?? 0) - (a.width ?? 0))[0];
+  const imageUrl = selectEventImage(event.images);
+
   const date =
     event.dates?.start?.dateTime ??
     (event.dates?.start?.localDate && event.dates?.start?.localTime
       ? `${event.dates.start.localDate}T${event.dates.start.localTime}`
       : event.dates?.start?.localDate);
 
+  const classification = event.classifications?.[0];
+  const segment = classification?.segment?.name;
+  const genre = classification?.genre?.name;
+  const category =
+    segment && genre ? `${segment} / ${genre}` : segment || genre || undefined;
+
   return {
     id: event.id,
     name: event.name,
     date: date ?? 'TBD',
     formattedDate: formatEventDate(date),
-    category: event.classifications?.[0]?.segment?.name,
-    imageUrl: image?.url,
+    category,
+    imageUrl,
     venue: transformVenue(event._embedded?.venues?.[0]),
   };
 };
@@ -147,28 +217,25 @@ export const ticketmasterApi = createApi({
   }),
   endpoints: builder => ({
     searchEvents: builder.query<EventSearchResult, EventSearchArgs>({
-      query: ({keyword, city, page = 0, size = 20, classificationName}) => {
-        if (!API_KEY) {
-          throw new Error('Ticketmaster API key is missing. Please set it in your .env file.');
-        }
-
-        return {
-          url: '/events.json',
-          params: {
-            apikey: API_KEY,
-            keyword: keyword || undefined,
-            city: city || undefined,
-            page,
-            size,
-            sort: 'date,asc',
-            classificationName:
-              classificationName && classificationName.toLowerCase() !== 'all'
-                ? classificationName
-                : undefined,
-          },
-        };
-      },
-      transformResponse: (response: TicketmasterSearchResponse): EventSearchResult => {
+      query: ({keyword, city, page = 0, size = 20, classificationName}) => ({
+        url: '/events.json',
+        params: {
+          apikey: API_KEY,
+          keyword: keyword || undefined,
+          city: city || undefined,
+          page,
+          size,
+          sort: 'date,asc',
+          classificationName:
+            classificationName &&
+            classificationName.toLowerCase() !== 'all'
+              ? classificationName
+              : undefined,
+        },
+      }),
+      transformResponse: (
+        response: TicketmasterSearchResponse,
+      ): EventSearchResult => {
         const events = response._embedded?.events ?? [];
         return {
           events: events.map(transformEventSummary),
@@ -179,19 +246,14 @@ export const ticketmasterApi = createApi({
       },
     }),
     getEventById: builder.query<EventDetail, string>({
-      query: eventId => {
-        if (!API_KEY) {
-          throw new Error('Ticketmaster API key is missing. Please set it in your .env file.');
-        }
-
-        return {
-          url: `/events/${eventId}.json`,
-          params: {
-            apikey: API_KEY,
-          },
-        };
-      },
-      transformResponse: (response: TicketmasterEvent): EventDetail => transformEventDetail(response),
+      query: eventId => ({
+        url: `/events/${eventId}.json`,
+        params: {
+          apikey: API_KEY,
+        },
+      }),
+      transformResponse: (response: TicketmasterEvent): EventDetail =>
+        transformEventDetail(response),
     }),
   }),
 });

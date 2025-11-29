@@ -14,16 +14,23 @@ interface Props {
 const EventCard: React.FC<Props> = ({event, isFavorite, onPress, onToggleFavorite}) => {
   const colors = useThemeColors();
   const venueLine =
-    [event.venue?.name, event.venue?.city, event.venue?.state].filter(Boolean).join(' • ') ||
+    [event.venue?.name, event.venue?.city, event.venue?.state].filter(Boolean).join(' / ') ||
     'Venue TBA';
 
   return (
     <Pressable style={[styles.container, {backgroundColor: colors.card, borderColor: colors.border}]} onPress={onPress}>
       {event.imageUrl ? (
-        <Image source={{uri: event.imageUrl}} style={styles.image} resizeMode="cover" />
+        <Image
+          source={{uri: event.imageUrl}}
+          style={styles.image}
+          resizeMode="cover"
+          accessibilityRole="image"
+          accessibilityLabel={`${event.name} cover image`}
+        />
       ) : (
         <View style={[styles.image, styles.imagePlaceholder, {backgroundColor: colors.surface}]}>
           <MaterialIcons name="image-not-supported" size={32} color={colors.muted} />
+          <Text style={[styles.placeholderText, {color: colors.muted}]}>No image</Text>
         </View>
       )}
       <View style={styles.content}>
@@ -63,10 +70,17 @@ const styles = StyleSheet.create({
   image: {
     height: 180,
     width: '100%',
+    backgroundColor: '#d1d5db',
   },
   imagePlaceholder: {
     justifyContent: 'center',
     alignItems: 'center',
+    paddingVertical: 24,
+  },
+  placeholderText: {
+    marginTop: 8,
+    fontSize: 12,
+    fontWeight: '600',
   },
   content: {
     padding: 16,

@@ -25,17 +25,4 @@ jest.mock('react-native-mmkv', () => {
   return {MMKV: MockMMKV};
 });
 
-jest.mock('react-native-maps', () => {
-  const React = require('react');
-  const {View} = require('react-native');
-
-  const MockMapView = props => React.createElement(View, props, props.children);
-  const MockMarker = props => React.createElement(View, props, props.children);
-
-  MockMapView.Marker = MockMarker;
-  MockMapView.DEFAULT_PROPS = {};
-
-  return MockMapView;
-});
-
 global.__reanimatedWorkletInit = () => {};

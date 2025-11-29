@@ -75,3 +75,8 @@ yarn-error.log
 
 # Environment secrets
 .env
+.env.local
+.env.*.local
+TM_API_KEY=nw1Nn0ykN3p8ZdZQnvGHnP92Ik0WeLtC
+TM_BASE_URL=https://app.ticketmaster.com/discovery/v2
+GOOGLE_MAPS_API_KEY=YOUR_MAPS_KEY_WILL_GO_HERE_LATER

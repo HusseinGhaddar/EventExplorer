@@ -1,3 +1,4 @@
+// src/store/index.ts
 import {configureStore, createListenerMiddleware, isAnyOf} from '@reduxjs/toolkit';
 import {ticketmasterApi} from '../api/ticketmasterApi';
 import favoritesReducer, {
@@ -24,7 +25,10 @@ export const store = configureStore({
     },
   },
   middleware: getDefaultMiddleware =>
-    getDefaultMiddleware().concat(ticketmasterApi.middleware, favoritesListener.middleware),
+    getDefaultMiddleware().concat(
+      ticketmasterApi.middleware,
+      favoritesListener.middleware,
+    ),
 });
 
 export type RootState = ReturnType<typeof store.getState>;
@@ -37,3 +41,6 @@ favoritesListener.startListening({
     persistFavorites(state.favorites.entities);
   },
 });
+
+// 👇 this is the important addition
+export default store;

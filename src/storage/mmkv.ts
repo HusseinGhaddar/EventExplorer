@@ -1,25 +1,84 @@
-import {MMKV} from 'react-native-mmkv';
+// src/storage/mmkv.ts
+
 import type {EventSummary} from '../types/events';
 
-const FAVORITES_KEY = 'favorites';
+type MMKVLike = {
+  getString: (key: string) => string | undefined;
+  set: (key: string, value: string) => void;
+};
 
-export const storage = new MMKV();
+// Try to load MMKV, but fall back to in-memory storage if it isn't available
+let storage: MMKVLike;
 
-export const getStoredFavorites = (): Record<string, EventSummary> => {
-  const favoritesString = storage.getString(FAVORITES_KEY);
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const mmkvModule = require('react-native-mmkv');
 
-  if (!favoritesString) {
-    return {};
+  const MMKVConstructor =
+    mmkvModule?.MMKV ?? mmkvModule?.default ?? null;
+
+  if (MMKVConstructor) {
+    storage = new MMKVConstructor({
+      id: 'event_explorer_favorites',
+    });
+  } else {
+    console.warn(
+      '[MMKV] No MMKV constructor available, falling back to in-memory storage.',
+    );
+    const memory: Record<string, string> = {};
+    storage = {
+      getString: (key: string) => memory[key],
+      set: (key: string, value: string) => {
+        memory[key] = value;
+      },
+    };
   }
+} catch (error) {
+  console.warn(
+    '[MMKV] Failed to initialize MMKV, falling back to in-memory storage.',
+    error,
+  );
+  const memory: Record<string, string> = {};
+  storage = {
+    getString: (key: string) => memory[key],
+    set: (key: string, value: string) => {
+      memory[key] = value;
+    },
+  };
+}
 
+const FAVORITES_KEY = 'favorites_v1';
+
+export type FavoritesEntities = Record<string, EventSummary>;
+
+export const getStoredFavorites = (): FavoritesEntities => {
   try {
-    return JSON.parse(favoritesString) as Record<string, EventSummary>;
+    const raw = storage.getString(FAVORITES_KEY);
+    if (!raw) {
+      return {};
+    }
+
+    const parsed = JSON.parse(raw) as unknown;
+
+    if (!parsed || typeof parsed !== 'object') {
+      return {};
+    }
+
+    return parsed as FavoritesEntities;
   } catch (error) {
-    console.warn('Failed to parse favorites from MMKV', error);
+    console.warn(
+      '[MMKV] Failed to read favorites, falling back to empty.',
+      error,
+    );
     return {};
   }
 };
 
-export const persistFavorites = (favorites: Record<string, EventSummary>) => {
-  storage.set(FAVORITES_KEY, JSON.stringify(favorites));
+export const persistFavorites = (entities: FavoritesEntities): void => {
+  try {
+    const serialized = JSON.stringify(entities);
+    storage.set(FAVORITES_KEY, serialized);
+  } catch (error) {
+    console.warn('[MMKV] Failed to write favorites.', error);
+  }
 };
