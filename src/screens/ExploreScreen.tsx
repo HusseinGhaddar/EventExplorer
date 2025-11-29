@@ -1,0 +1,338 @@
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  Keyboard,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import {NativeStackNavigationProp} from '@react-navigation/native-stack';
+import {useNavigation} from '@react-navigation/native';
+import {useLazySearchEventsQuery} from '../api/ticketmasterApi';
+import type {EventSummary} from '../types/events';
+import EventCard from '../components/EventCard';
+import StateMessage from '../components/StateMessage';
+import {useAppDispatch, useAppSelector} from '../store/hooks';
+import {resetFilters, updateFilters, type EventCategory} from '../store/slices/filtersSlice';
+import {toggleFavorite} from '../store/slices/favoritesSlice';
+import type {RootStackParamList} from '../navigation/RootNavigator';
+import {useThemeColors} from '../theme/colors';
+
+const CATEGORY_OPTIONS = [
+  {label: 'All', value: 'all'},
+  {label: 'Music', value: 'music'},
+  {label: 'Sports', value: 'sports'},
+  {label: 'Arts & Theatre', value: 'arts & theatre'},
+  {label: 'Film', value: 'film'},
+  {label: 'Misc', value: 'miscellaneous'},
+] as const;
+
+const categoryToClassification: Record<EventCategory, string | undefined> = {
+  all: undefined,
+  music: 'Music',
+  sports: 'Sports',
+  'arts & theatre': 'Arts & Theatre',
+  film: 'Film',
+  miscellaneous: 'Miscellaneous',
+};
+
+type Navigation = NativeStackNavigationProp<RootStackParamList>;
+
+const ExploreScreen = () => {
+  const colors = useThemeColors();
+  const navigation = useNavigation<Navigation>();
+  const dispatch = useAppDispatch();
+  const filters = useAppSelector(state => state.filters);
+  const favorites = useAppSelector(state => state.favorites.entities);
+  const [events, setEvents] = useState<EventSummary[]>([]);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [hasMoreResults, setHasMoreResults] = useState(true);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [triggerSearch, {data, isFetching, isError, error}] = useLazySearchEventsQuery();
+
+  const searchDisabled = !filters.keyword.trim() && !filters.city.trim();
+  const isInitialLoading = isFetching && events.length === 0;
+
+  useEffect(() => {
+    if (!data) {
+      return;
+    }
+    setEvents(prev => (data.page === 0 ? data.events : [...prev, ...data.events]));
+    setCurrentPage(data.page);
+    setHasMoreResults(data.page < data.totalPages - 1);
+  }, [data]);
+
+  useEffect(() => {
+    if (!isFetching) {
+      setIsRefreshing(false);
+    }
+  }, [isFetching]);
+
+  const handleSearch = useCallback(
+    (page = 0) => {
+      if (searchDisabled) {
+        return;
+      }
+
+      setHasSearched(true);
+      if (page === 0) {
+        setEvents([]);
+        setHasMoreResults(true);
+      }
+
+      setIsRefreshing(page === 0 && hasSearched);
+
+      triggerSearch({
+        keyword: filters.keyword.trim(),
+        city: filters.city.trim(),
+        page,
+        classificationName: filters.category ? categoryToClassification[filters.category] : undefined,
+      });
+
+      Keyboard.dismiss();
+    },
+    [filters, triggerSearch, searchDisabled, hasSearched],
+  );
+
+  const loadNextPage = useCallback(() => {
+    if (isFetching || !hasMoreResults) {
+      return;
+    }
+    handleSearch(currentPage + 1);
+  }, [handleSearch, currentPage, hasMoreResults, isFetching]);
+
+  const errorMessage = useMemo(() => {
+    if (!isError || !error) {
+      return undefined;
+    }
+
+    if ('status' in error) {
+      if (typeof error.status === 'string') {
+        return error.error;
+      }
+      return `Request failed with status ${error.status}`;
+    }
+
+    return error.message ?? 'Something went wrong.';
+  }, [error, isError]);
+
+  const onResetFilters = () => {
+    dispatch(resetFilters());
+    setEvents([]);
+    setHasSearched(false);
+    setHasMoreResults(true);
+  };
+
+  const renderEvent = ({item}: {item: EventSummary}) => (
+    <EventCard
+      event={item}
+      isFavorite={Boolean(favorites[item.id])}
+      onPress={() => navigation.navigate('EventDetails', {eventId: item.id, event: item})}
+      onToggleFavorite={() => dispatch(toggleFavorite(item))}
+    />
+  );
+
+  return (
+    <View style={[styles.container, {backgroundColor: colors.background}]}>
+      <View style={[styles.searchContainer, {backgroundColor: colors.card, borderColor: colors.border}]}>
+        <Text style={[styles.sectionTitle, {color: colors.text}]}>Search events</Text>
+        <TextInput
+          placeholder="Keyword (artist, team, genre)"
+          placeholderTextColor={colors.muted}
+          style={[styles.input, {borderColor: colors.border, color: colors.text}]}
+          value={filters.keyword}
+          onChangeText={text => dispatch(updateFilters({keyword: text}))}
+          autoCorrect={false}
+          autoCapitalize="none"
+          returnKeyType="search"
+          onSubmitEditing={() => handleSearch(0)}
+        />
+        <TextInput
+          placeholder="City"
+          placeholderTextColor={colors.muted}
+          style={[styles.input, {borderColor: colors.border, color: colors.text}]}
+          value={filters.city}
+          onChangeText={text => dispatch(updateFilters({city: text}))}
+          autoCorrect={false}
+          autoCapitalize="words"
+          returnKeyType="search"
+          onSubmitEditing={() => handleSearch(0)}
+        />
+        <View style={styles.categoryList}>
+          {CATEGORY_OPTIONS.map(option => {
+            const selected = filters.category === option.value;
+            return (
+              <Pressable
+                key={option.value}
+                onPress={() => dispatch(updateFilters({category: option.value}))}
+                style={[
+                  styles.categoryChip,
+                  {
+                    backgroundColor: selected ? `${colors.primary}20` : colors.surface,
+                    borderColor: selected ? colors.primary : colors.border,
+                  },
+                ]}>
+                <Text style={{color: selected ? colors.primary : colors.muted, fontWeight: '600'}}>
+                  {option.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <View style={styles.actionsRow}>
+          <Pressable
+            disabled={searchDisabled}
+            onPress={() => handleSearch(0)}
+            style={[
+              styles.button,
+              styles.buttonSpacing,
+              {backgroundColor: searchDisabled ? colors.border : colors.primary},
+            ]}>
+            <Text style={{color: searchDisabled ? colors.muted : '#fff', fontWeight: '600'}}>Search</Text>
+          </Pressable>
+          <Pressable style={[styles.buttonOutline, {borderColor: colors.border}]} onPress={onResetFilters}>
+            <Text style={{color: colors.text, fontWeight: '600'}}>Reset</Text>
+          </Pressable>
+        </View>
+      </View>
+      {errorMessage && events.length > 0 ? (
+        <View style={[styles.errorBanner, {backgroundColor: `${colors.danger}12`, borderColor: colors.danger}]}>
+          <Text style={{color: colors.danger}}>{errorMessage}</Text>
+        </View>
+      ) : null}
+      <FlatList
+        data={events}
+        keyExtractor={item => item.id}
+        renderItem={renderEvent}
+        contentContainerStyle={[
+          styles.listContent,
+          events.length === 0 && !isInitialLoading ? styles.centerContent : undefined,
+        ]}
+        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => handleSearch(0)} tintColor={colors.primary} />}
+        onEndReachedThreshold={0.4}
+        onEndReached={loadNextPage}
+        ListFooterComponent={
+          isFetching && events.length > 0 ? (
+            <View style={styles.footerLoader}>
+              <ActivityIndicator color={colors.primary} />
+            </View>
+          ) : null
+        }
+        ListEmptyComponent={
+          isInitialLoading ? (
+            <ActivityIndicator color={colors.primary} size="large" style={{marginTop: 24}} />
+          ) : isError ? (
+            <StateMessage
+              title="Unable to fetch events"
+              description={errorMessage ?? 'Please check your connection and try again.'}
+              iconName="error-outline"
+              actionLabel="Try again"
+              onAction={() => handleSearch(0)}
+            />
+          ) : hasSearched ? (
+            <StateMessage
+              title="No events found"
+              description="Try adjusting the city or keyword and search again."
+              iconName="sentiment-dissatisfied"
+              actionLabel="Adjust filters"
+              onAction={onResetFilters}
+            />
+          ) : (
+            <StateMessage
+              title="Start exploring"
+              description="Search by city or keyword to find live events happening near you."
+              iconName="travel-explore"
+              actionLabel="Search events"
+              onAction={() => handleSearch(0)}
+            />
+          )
+        }
+      />
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  searchContainer: {
+    margin: 16,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 12,
+    fontSize: 14,
+  },
+  categoryList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  categoryChip: {
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderWidth: 1,
+    marginRight: 8,
+    marginTop: 8,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    marginTop: 4,
+  },
+  button: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  buttonOutline: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  buttonSpacing: {
+    marginRight: 12,
+  },
+  errorBanner: {
+    marginHorizontal: 16,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 48,
+  },
+  centerContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+  },
+  footerLoader: {
+    paddingVertical: 24,
+  },
+});
+
+export default ExploreScreen;
