@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import {StatusBar, useColorScheme} from 'react-native';
+import {StatusBar} from 'react-native';
 import {
   NavigationContainer,
   DarkTheme,
@@ -16,25 +16,29 @@ import {GestureHandlerRootView} from 'react-native-gesture-handler';
 
 import RootNavigator from './src/navigation/RootNavigator';
 import store from './src/store';
+import {useResolvedThemeMode} from './src/theme/colors';
 
 function App(): React.JSX.Element {
-  const scheme = useColorScheme();
-
   return (
     <GestureHandlerRootView style={{flex: 1}}>
       <Provider store={store}>
-        <SafeAreaProvider>
-          <NavigationContainer
-            theme={scheme === 'dark' ? DarkTheme : DefaultTheme}>
-            <StatusBar
-              barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'}
-            />
-            <RootNavigator />
-          </NavigationContainer>
-        </SafeAreaProvider>
+        <AppContent />
       </Provider>
     </GestureHandlerRootView>
   );
 }
+
+const AppContent = () => {
+  const scheme = useResolvedThemeMode();
+
+  return (
+    <SafeAreaProvider>
+      <NavigationContainer theme={scheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <StatusBar barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'} />
+        <RootNavigator />
+      </NavigationContainer>
+    </SafeAreaProvider>
+  );
+};
 
 export default App;

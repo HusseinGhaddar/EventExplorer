@@ -18,7 +18,11 @@ const RootNavigator = () => {
   return (
     <Stack.Navigator>
       <Stack.Screen name="Tabs" component={MainTabNavigator} options={{headerShown: false}} />
-      <Stack.Screen name="EventDetails" component={EventDetailsScreen} options={{title: 'Event Details'}} />
+      <Stack.Screen
+        name="EventDetails"
+        component={EventDetailsScreen}
+        options={{title: 'Event Details', animation: 'fade_from_bottom'}}
+      />
     </Stack.Navigator>
   );
 };

@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useNavigation} from '@react-navigation/native';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import {useLazySearchEventsQuery} from '../api/ticketmasterApi';
 import type {EventSummary} from '../types/events';
 import EventCard from '../components/EventCard';
@@ -19,8 +20,10 @@ import StateMessage from '../components/StateMessage';
 import {useAppDispatch, useAppSelector} from '../store/hooks';
 import {resetFilters, updateFilters, type EventCategory} from '../store/slices/filtersSlice';
 import {toggleFavorite} from '../store/slices/favoritesSlice';
+import {setThemePreference} from '../store/slices/themeSlice';
 import type {RootStackParamList} from '../navigation/RootNavigator';
 import {useThemeColors} from '../theme/colors';
+import type {ThemePreference} from '../types/theme';
 
 const CATEGORY_OPTIONS = [
   {label: 'All', value: 'all'},
@@ -42,12 +45,25 @@ const categoryToClassification: Record<EventCategory, string | undefined> = {
 
 type Navigation = NativeStackNavigationProp<RootStackParamList>;
 
+const THEME_ORDER: ThemePreference[] = ['system', 'light', 'dark'];
+const THEME_MODE_LABELS: Record<ThemePreference, string> = {
+  system: 'Auto',
+  light: 'Light',
+  dark: 'Dark',
+};
+const THEME_MODE_ICONS: Record<ThemePreference, string> = {
+  system: 'brightness-medium',
+  light: 'light-mode',
+  dark: 'dark-mode',
+};
+
 const ExploreScreen = () => {
   const colors = useThemeColors();
   const navigation = useNavigation<Navigation>();
   const dispatch = useAppDispatch();
   const filters = useAppSelector(state => state.filters);
   const favorites = useAppSelector(state => state.favorites.entities);
+  const themePreference = useAppSelector(state => state.theme.mode);
   const [events, setEvents] = useState<EventSummary[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
   const [hasMoreResults, setHasMoreResults] = useState(true);
@@ -128,6 +144,12 @@ const ExploreScreen = () => {
     setHasMoreResults(true);
   };
 
+  const cycleThemePreference = useCallback(() => {
+    const currentIndex = THEME_ORDER.indexOf(themePreference);
+    const next = THEME_ORDER[(currentIndex + 1) % THEME_ORDER.length];
+    dispatch(setThemePreference(next));
+  }, [dispatch, themePreference]);
+
   const renderEvent = ({item}: {item: EventSummary}) => (
     <EventCard
       event={item}
@@ -140,7 +162,25 @@ const ExploreScreen = () => {
   return (
     <View style={[styles.container, {backgroundColor: colors.background}]}>
       <View style={[styles.searchContainer, {backgroundColor: colors.card, borderColor: colors.border}]}>
+      <View style={styles.searchHeader}>
         <Text style={[styles.sectionTitle, {color: colors.text}]}>Search events</Text>
+        <Pressable
+          style={[
+            styles.themeButton,
+            {
+              borderColor: colors.border,
+              backgroundColor: colors.surface,
+            },
+          ]}
+          onPress={cycleThemePreference}
+          accessibilityRole="button"
+          accessibilityLabel="Toggle color theme">
+          <MaterialIcons name={THEME_MODE_ICONS[themePreference]} size={18} color={colors.text} />
+          <Text style={[styles.themeButtonText, {color: colors.text}]}>
+            {THEME_MODE_LABELS[themePreference]}
+          </Text>
+        </Pressable>
+      </View>
         <TextInput
           placeholder="Keyword (artist, team, genre)"
           placeholderTextColor={colors.muted}
@@ -267,10 +307,28 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
   },
+  searchHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    marginBottom: 12,
+  },
+  themeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  themeButtonText: {
+    marginLeft: 6,
+    fontSize: 12,
+    fontWeight: '600',
   },
   input: {
     borderWidth: 1,

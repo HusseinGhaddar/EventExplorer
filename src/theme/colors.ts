@@ -1,4 +1,6 @@
-import {useColorScheme} from 'react-native';
+import {type ColorSchemeName, useColorScheme} from 'react-native';
+import {useAppSelector} from '../store/hooks';
+import type {ThemePreference} from '../types/theme';
 
 export interface ThemeColors {
   background: string;
@@ -33,7 +35,25 @@ const darkTheme: ThemeColors = {
   danger: '#F87171',
 };
 
-export const useThemeColors = () => {
-  const scheme = useColorScheme();
-  return scheme === 'dark' ? darkTheme : lightTheme;
+const resolveThemeMode = (
+  preference: ThemePreference,
+  systemScheme: ColorSchemeName,
+): 'light' | 'dark' => {
+  if (preference === 'system') {
+    return systemScheme === 'dark' ? 'dark' : 'light';
+  }
+  return preference;
 };
+
+export const useResolvedThemeMode = (): 'light' | 'dark' => {
+  const preference = useAppSelector(state => state.theme.mode);
+  const systemScheme = useColorScheme();
+  return resolveThemeMode(preference, systemScheme);
+};
+
+export const useThemeColors = () => {
+  const resolvedMode = useResolvedThemeMode();
+  return resolvedMode === 'dark' ? darkTheme : lightTheme;
+};
+
+export {resolveThemeMode};

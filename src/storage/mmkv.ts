@@ -1,6 +1,7 @@
 // src/storage/mmkv.ts
 
 import type {EventSummary} from '../types/events';
+import type {ThemePreference} from '../types/theme';
 
 type MMKVLike = {
   getString: (key: string) => string | undefined;
@@ -48,6 +49,7 @@ try {
 }
 
 const FAVORITES_KEY = 'favorites_v1';
+const THEME_PREFERENCE_KEY = 'theme_pref_v1';
 
 export type FavoritesEntities = Record<string, EventSummary>;
 
@@ -80,5 +82,25 @@ export const persistFavorites = (entities: FavoritesEntities): void => {
     storage.set(FAVORITES_KEY, serialized);
   } catch (error) {
     console.warn('[MMKV] Failed to write favorites.', error);
+  }
+};
+
+export const getStoredThemePreference = (): ThemePreference => {
+  try {
+    const raw = storage.getString(THEME_PREFERENCE_KEY);
+    if (raw === 'light' || raw === 'dark' || raw === 'system') {
+      return raw;
+    }
+  } catch (error) {
+    console.warn('[MMKV] Failed to read theme preference, falling back to system.', error);
+  }
+  return 'system';
+};
+
+export const persistThemePreference = (preference: ThemePreference): void => {
+  try {
+    storage.set(THEME_PREFERENCE_KEY, preference);
+  } catch (error) {
+    console.warn('[MMKV] Failed to persist theme preference.', error);
   }
 };
