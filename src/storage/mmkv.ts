@@ -1,4 +1,3 @@
-// src/storage/mmkv.ts
 
 import type {EventSummary} from '../types/events';
 import type {ThemePreference} from '../types/theme';
@@ -8,11 +7,9 @@ type MMKVLike = {
   set: (key: string, value: string) => void;
 };
 
-// Try to load MMKV, but fall back to in-memory storage if it isn't available
 let storage: MMKVLike;
 
 try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const mmkvModule = require('react-native-mmkv');
 
   const MMKVConstructor =
