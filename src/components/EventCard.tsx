@@ -59,7 +59,6 @@ const EventCard: React.FC<Props> = ({event, isFavorite, onPress, onToggleFavorit
       return;
     }
     animateFavorite();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFavorite]);
 
   const handlePressIn = () => {
