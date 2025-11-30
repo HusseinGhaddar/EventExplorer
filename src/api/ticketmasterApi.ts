@@ -15,15 +15,6 @@ const BASE_URL = 'https://app.ticketmaster.com/discovery/v2';
 // To keep the app functional, we fall back to the known key if needed.
 const API_KEY = (TICKETMASTER_API_KEY || 'nw1Nn0ykN3p8ZdZQnvGHnP92Ik0WeLtC').trim();
 
-// Optional: log once so you can see in DevTools whether the env is coming through.
-if (__DEV__) {
-  // eslint-disable-next-line no-console
-  console.log(
-    '[Ticketmaster] Using API key from',
-    TICKETMASTER_API_KEY ? '.env' : 'fallback string',
-  );
-}
-
 interface TicketmasterImage {
   url: string;
   width?: number;

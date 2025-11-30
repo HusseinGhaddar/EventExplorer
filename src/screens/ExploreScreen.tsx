@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -83,7 +83,7 @@ const ExploreScreen = () => {
   const [currentPage, setCurrentPage] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [triggerSearch, {data, isFetching, isError, error}] = useLazySearchEventsQuery();
-  const seededRandomCity = useRef(false);
+  const [hasSeededRandomFeed, setHasSeededRandomFeed] = useState(false);
 
   const searchDisabled = !filters.keyword.trim() && !filters.city.trim();
   const isInitialLoading = isFetching && events.length === 0;
@@ -104,19 +104,6 @@ const ExploreScreen = () => {
   }, [isFetching]);
 
   useEffect(() => {
-    if (seededRandomCity.current) {
-      return;
-    }
-    const hasFilters = filters.keyword.trim() || filters.city.trim();
-    if (hasFilters || hasSearched) {
-      return;
-    }
-    const city = RANDOM_CITIES[Math.floor(Math.random() * RANDOM_CITIES.length)];
-    seededRandomCity.current = true;
-    dispatch(updateFilters({city}));
-  }, [dispatch, filters.city, filters.keyword, hasSearched]);
-
-  useEffect(() => {
     const keyword = filters.keyword.trim();
     const city = filters.city.trim();
 
@@ -129,10 +116,25 @@ const ExploreScreen = () => {
     return () => clearTimeout(debounceId);
   }, [filters.keyword, filters.city, filters.category, handleSearch]);
 
-  const handleSearch = useCallback(
-    (page = 0, options?: {dismissKeyboard?: boolean}) => {
-      const keyword = filters.keyword.trim();
-      const city = filters.city.trim();
+  useEffect(() => {
+    const hasFilters = filters.keyword.trim() || filters.city.trim();
+    if (hasSeededRandomFeed || hasFilters || hasSearched || isFetching) {
+      return;
+    }
+
+    const city = RANDOM_CITIES[Math.floor(Math.random() * RANDOM_CITIES.length)];
+    setHasSeededRandomFeed(true);
+    runSearch({keyword: '', city}, 0, {dismissKeyboard: false});
+  }, [filters.keyword, filters.city, hasSeededRandomFeed, hasSearched, isFetching, runSearch]);
+
+  const runSearch = useCallback(
+    (
+      params: {keyword: string; city: string},
+      page = 0,
+      options?: {dismissKeyboard?: boolean},
+    ) => {
+      const keyword = params.keyword.trim();
+      const city = params.city.trim();
 
       if (!keyword && !city) {
         return;
@@ -159,7 +161,13 @@ const ExploreScreen = () => {
         Keyboard.dismiss();
       }
     },
-    [filters, triggerSearch, hasSearched],
+    [filters.category, triggerSearch, hasSearched],
+  );
+
+  const handleSearch = useCallback(
+    (page = 0, options?: {dismissKeyboard?: boolean}) =>
+      runSearch({keyword: filters.keyword, city: filters.city}, page, options),
+    [filters.city, filters.keyword, runSearch],
   );
 
   const loadNextPage = useCallback(() => {
@@ -189,6 +197,7 @@ const ExploreScreen = () => {
     setEvents([]);
     setHasSearched(false);
     setHasMoreResults(true);
+    setHasSeededRandomFeed(false);
   };
 
   const cycleThemePreference = useCallback(() => {

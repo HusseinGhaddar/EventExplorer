@@ -1,79 +1,148 @@
 # Event Explorer
 
-Event Explorer is a React Native application that helps users search, browse, and save live events happening in any city using the Ticketmaster Discovery API. The app is built with the new React Native architecture (0.76), TypeScript, Redux Toolkit, RTK Query, React Navigation, and MMKV.
+Event Explorer is a React Native app that lets users search, browse, and save live events in any city using the Ticketmaster Discovery API.
+
+It’s built with:
+
+- React Native 0.76 (new architecture / bridgeless)
+- TypeScript
+- Redux Toolkit + RTK Query
+- React Navigation (stack + tabs)
+- MMKV for local storage
+
+---
 
 ## Features
 
-- **Search** for events by city and/or keyword with optional category filters.
-- **Infinite scrolling** list with graceful loading, empty, and error states.
-- **Event detail view** with hero image, metadata, ticket link, and venue location opened via Google Maps deep link.
-- **Favorites tab** powered by MMKV so saved events remain available offline.
-- **Robust states** for loading, pagination, network failures, and pull-to-refresh.
+### Search & Explore
 
-## Requirements
+- Search events by **city**, **keyword**, or both.
+- When both inputs are empty, the Explore screen shows a **suggested events feed**:
+  - It picks a random popular city and fetches real events.
+  - Inputs stay blank, so the user can still type their own city/keyword at any time.
+- Uses the Ticketmaster `/events` endpoint with:
+  - `keyword`
+  - `city`
+  - `page` and `size` for pagination
+  - optional `classificationName` for basic category filtering
 
-- Node.js 18+ and Watchman (macOS) per [React Native environment setup](https://reactnative.dev/docs/environment-setup).
-- Android Studio and/or Xcode depending on target platform.
-- Ticketmaster Discovery API key.
+### List of upcoming events
 
-## Getting Started
+The Explore screen shows a scrollable list (FlatList) with:
 
-1. **Install dependencies**
-   ```bash
-   npm install
-   ```
+- Event **name**
+- Formatted **date and time**
+- Event **image** (or a styled placeholder if none is provided)
+- **Venue** name and city
+- **Category** (segment / genre combination)
 
-2. **Configure environment variables**
-   - Duplicate `.env.example` into `.env` and add your Ticketmaster key.
-     ```env
-     TICKETMASTER_API_KEY=YOUR_TICKETMASTER_KEY
-     ```
+Behavior:
 
-3. **Run iOS pods (macOS)**
-   ```bash
-   cd ios && pod install && cd ..
-   ```
+- Infinite scroll (**load more on scroll**)
+- Loading indicators while fetching data
+- Empty state messaging when no results are found
+- Error state with a retry action when network/API calls fail
+- Pull-to-refresh support
 
-4. **Start Metro**
-   ```bash
-   npm start
-   ```
+### Event details
 
-5. **Launch the app**
-   ```bash
-   npm run android   # Android emulator / device
-   npm run ios       # iOS simulator / device
-   ```
+Tapping an event opens the Event Details screen with:
 
-6. **Run tests**
-   ```bash
-   npm test -- --runTestsByPath __tests__/App.test.tsx
-   ```
+- Poster / hero image
+- Event title, formatted date, and category badge
+- Description with safe fallbacks if the API doesn’t provide one
+- Additional info when available
+- Venue name and full address
+- Price ranges (if Ticketmaster returns them), formatted with currency
+- A **“Buy tickets”** button that opens the event’s ticket URL in the browser
 
-## Project Structure
+#### Google Maps integration
 
-```
+Location is handled using **Google Maps deep links** (no SDK, no static map images):
+
+- If the venue has latitude/longitude, the app opens:
+  - `https://www.google.com/maps/search/?api=1&query=<lat>,<lng>`
+- If only address/city is available, it opens:
+  - `https://www.google.com/maps/search/?api=1&query=<encoded address>`
+
+This gives the user the full Google Maps experience (directions, navigation, etc.) without extra native configuration or API keys.
+
+The app **does not use an inline MapView or static map preview** on purpose:
+
+- Keeps the setup simpler and more reliable.
+- Avoids extra native dependencies and a Google Maps API key.
+- Still provides a clean way to open the venue location.
+
+### Favorites with local storage (MMKV)
+
+- Events can be **favorited/unfavorited** from the Explore list and/or the details screen.
+- A dedicated **Favorites** tab shows all saved events.
+- Favorites are stored in Redux and persisted via **MMKV**:
+  - `src/storage/mmkv.ts` handles serialization to/from MMKV.
+  - A Redux listener middleware watches favorites actions and writes updates to storage.
+
+### Theming and UX polish
+
+- Theme selector with **auto / light / dark** modes, stored in Redux and persisted with MMKV.
+- A small control on the Explore screen switches between:
+  - System (auto)
+  - Light
+  - Dark
+- Subtle animations on:
+  - Event card presses
+  - Favorite toggling
+  - Transition into the details screen
+
+---
+
+## Tech Stack
+
+- **React Native** 0.76 (new architecture / bridgeless)
+- **TypeScript**
+- **React Navigation** (stack navigator + bottom tab navigator)
+- **Redux Toolkit**:
+  - Store configuration
+  - Slices for favorites, filters, and theme
+- **RTK Query**:
+  - Ticketmaster Discovery API client
+  - Normalized event models (`EventSummary`, `EventDetail`)
+  - Pagination, loading, and error handling
+- **MMKV**:
+  - Persistent storage for favorites and theme mode
+- **Jest**:
+  - Basic smoke test for the root `App` component
+
+---
+
+## Setup
+
+### Prerequisites
+
+- Node.js 18+
+- React Native environment set up (Android SDK, Java, Android Studio, etc.)  
+  Docs: <https://reactnative.dev/docs/environment-setup>
+
+### 1. Install dependencies
+
+```bash
+npm install
+
+Project structure
+
 src/
   api/               # RTK Query service for Ticketmaster
-  components/        # Reusable UI building blocks (cards, status messages)
-  navigation/        # Stack + Tab navigators
-  screens/           # Explore, Favorites, and Event details screens
-  storage/           # MMKV helper + persistence helpers
-  store/             # Redux store, slices, and typed hooks
-  theme/             # Color palette + hook
-  types/             # Shared TypeScript interfaces
-```
+  components/        # Event cards, state messages, reusable UI
+  navigation/        # Root stack + bottom tab navigators
+  screens/           # Explore, Favorites, EventDetails
+  storage/           # MMKV helpers for favorites and theme
+  store/             # Redux store, slices, and middleware
+  theme/             # Color palettes + theme hook
+  types/             # Shared TypeScript types (events, theme, env)
 
-### Implementation Notes
-- Ticketmaster `/events` is consumed via RTK Query with pagination, loading, empty, and error states normalized into `EventSummary` and `EventDetail` types.
-- Redux slices: filters, favorites, and theme; the root store wires in RTK Query middleware.
-- MMKV persists favorites and theme preference through listener middleware.
-- Event details deep-link to Google Maps using coordinates or address, and expose ticket URLs via `Linking.openURL`.
-- Bonus: dark/light/system toggle and lightweight animations on event cards/navigation.
+  Notes
 
-## Notes & Next Steps
+Ticketmaster rate limits or partial data can result in empty or sparse results; the app shows appropriate loading, empty, and error states with retry actions.
 
-- Ticketmaster rate limits apply; errors are surfaced via user-friendly banners and retry actions.
-- Consider adding automated screenshots or a short demo video for submission as requested in the test instructions.
+When the search fields are empty, Explore shows a random city feed so users immediately see real events.
 
-Happy building!
+A short demo video can be linked here (unlisted) to show the full flow: suggested events → search → event details → Google Maps → tickets → favorites → theme toggle.
