@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import {RouteProp, useRoute} from '@react-navigation/native';
-import {GOOGLE_MAPS_API_KEY} from '@env';
 import {useGetEventByIdQuery} from '../api/ticketmasterApi';
 import type {EventVenue, PriceRange} from '../types/events';
 import {useThemeColors, type ThemeColors} from '../theme/colors';
@@ -22,8 +21,6 @@ type RootStackParamList = {
 };
 
 type EventDetailsRouteProp = RouteProp<RootStackParamList, 'EventDetails'>;
-
-const GOOGLE_STATIC_MAP_KEY = (GOOGLE_MAPS_API_KEY || '').trim();
 
 const formatAddress = (venue?: EventVenue) => {
   if (!venue) {
@@ -116,9 +113,7 @@ const EventDetailsScreen: React.FC = () => {
     }
 
     if (address || city) {
-      const query = encodeURIComponent(
-        `${address ?? ''} ${city ?? ''}`.trim(),
-      );
+      const query = encodeURIComponent(`${address ?? ''} ${city ?? ''}`.trim());
       const url = `https://www.google.com/maps/search/?api=1&query=${query}`;
       Linking.openURL(url);
     }
@@ -126,21 +121,6 @@ const EventDetailsScreen: React.FC = () => {
 
   const venue = data?.venue;
   const locationLine = formatAddress(venue);
-  const hasCoordinates =
-    typeof venue?.latitude === 'number' && typeof venue?.longitude === 'number';
-  const showMapSection = Boolean(venue && hasCoordinates);
-
-  const mapPreviewUrl = useMemo(() => {
-    if (!hasCoordinates || !GOOGLE_STATIC_MAP_KEY) {
-      return undefined;
-    }
-
-    const lat = venue!.latitude;
-    const lng = venue!.longitude;
-    const size = '640x320';
-    const marker = `color:red%7C${lat},${lng}`;
-    return `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=14&size=${size}&maptype=roadmap&markers=${marker}&key=${GOOGLE_STATIC_MAP_KEY}`;
-  }, [hasCoordinates, venue]);
 
   const descriptionText = data?.description?.trim();
   const safeDescription =
@@ -192,48 +172,32 @@ const EventDetailsScreen: React.FC = () => {
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Event details</Text>
         <InfoRow icon="schedule" label="Date & time" value={data.formattedDate} />
-        <InfoRow icon="confirmation-number" label="Tickets" value={data.ticketUrl ? 'Available online' : 'Check venue website'} />
+        <InfoRow
+          icon="confirmation-number"
+          label="Tickets"
+          value={data.ticketUrl ? 'Available online' : 'Check venue website'}
+        />
         {venue ? (
           <>
             <InfoRow icon="festival" label="Venue" value={venue.name ?? 'Venue TBA'} />
-            <InfoRow icon="place" label="Location" value={locationLine ?? 'Location to be announced'} />
+            <InfoRow
+              icon="place"
+              label="Location"
+              value={locationLine ?? 'Location to be announced'}
+            />
           </>
         ) : (
           <InfoRow icon="place" label="Location" value="Location to be announced" />
         )}
         {venue ? (
-          <TouchableOpacity onPress={openInMaps} style={styles.secondaryButton} accessibilityRole="button">
+          <TouchableOpacity
+            onPress={openInMaps}
+            style={styles.secondaryButton}
+            accessibilityRole="button">
             <Text style={styles.secondaryButtonText}>Open in Google Maps</Text>
           </TouchableOpacity>
         ) : null}
       </View>
-
-      {showMapSection && (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Getting there</Text>
-          {mapPreviewUrl ? (
-            <TouchableOpacity
-              onPress={openInMaps}
-              activeOpacity={0.85}
-              style={styles.mapPreviewWrapper}
-              accessibilityRole="button"
-              accessibilityLabel="Open location in Google Maps">
-              <Image source={{uri: mapPreviewUrl}} style={styles.mapImage} resizeMode="cover" />
-              <View style={styles.mapOverlay}>
-                <MaterialIcons name="map" size={18} color="#fff" />
-                <Text style={styles.mapOverlayText}>Open interactive map</Text>
-              </View>
-            </TouchableOpacity>
-          ) : (
-            <View style={styles.mapPlaceholder}>
-              <MaterialIcons name="map" size={20} color={colors.muted} />
-              <Text style={styles.mapPlaceholderText}>
-                Add GOOGLE_MAPS_API_KEY (.env) to preview the map here.
-              </Text>
-            </View>
-          )}
-        </View>
-      )}
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>About this event</Text>
@@ -259,7 +223,10 @@ const EventDetailsScreen: React.FC = () => {
       ) : null}
 
       {data.ticketUrl && (
-        <TouchableOpacity onPress={openTickets} style={styles.primaryButton} accessibilityRole="button">
+        <TouchableOpacity
+          onPress={openTickets}
+          style={styles.primaryButton}
+          accessibilityRole="button">
           <Text style={styles.primaryButtonText}>Buy tickets</Text>
         </TouchableOpacity>
       )}
@@ -363,48 +330,6 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: 15,
       color: colors.text,
       fontWeight: '500',
-    },
-    mapPreviewWrapper: {
-      borderRadius: 12,
-      overflow: 'hidden',
-      marginTop: 12,
-      backgroundColor: colors.surface,
-    },
-    mapImage: {
-      width: '100%',
-      height: 220,
-    },
-    mapOverlay: {
-      position: 'absolute',
-      bottom: 12,
-      left: 12,
-      backgroundColor: 'rgba(0,0,0,0.6)',
-      borderRadius: 999,
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      flexDirection: 'row',
-      alignItems: 'center',
-    },
-    mapOverlayText: {
-      color: '#fff',
-      fontSize: 13,
-      marginLeft: 6,
-      fontWeight: '600',
-    },
-    mapPlaceholder: {
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.surface,
-      padding: 12,
-      marginTop: 12,
-      flexDirection: 'row',
-      alignItems: 'center',
-    },
-    mapPlaceholderText: {
-      marginLeft: 8,
-      color: colors.muted,
-      flex: 1,
     },
     primaryButton: {
       marginTop: 16,

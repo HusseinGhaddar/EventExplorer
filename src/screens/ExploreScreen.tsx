@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -43,6 +43,19 @@ const categoryToClassification: Record<EventCategory, string | undefined> = {
   miscellaneous: 'Miscellaneous',
 };
 
+const RANDOM_CITIES = [
+  'New York',
+  'Los Angeles',
+  'Chicago',
+  'San Francisco',
+  'Austin',
+  'London',
+  'Paris',
+  'Berlin',
+  'Tokyo',
+  'Sydney',
+];
+
 type Navigation = NativeStackNavigationProp<RootStackParamList>;
 
 const THEME_ORDER: ThemePreference[] = ['system', 'light', 'dark'];
@@ -70,6 +83,7 @@ const ExploreScreen = () => {
   const [currentPage, setCurrentPage] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [triggerSearch, {data, isFetching, isError, error}] = useLazySearchEventsQuery();
+  const seededRandomCity = useRef(false);
 
   const searchDisabled = !filters.keyword.trim() && !filters.city.trim();
   const isInitialLoading = isFetching && events.length === 0;
@@ -88,6 +102,19 @@ const ExploreScreen = () => {
       setIsRefreshing(false);
     }
   }, [isFetching]);
+
+  useEffect(() => {
+    if (seededRandomCity.current) {
+      return;
+    }
+    const hasFilters = filters.keyword.trim() || filters.city.trim();
+    if (hasFilters || hasSearched) {
+      return;
+    }
+    const city = RANDOM_CITIES[Math.floor(Math.random() * RANDOM_CITIES.length)];
+    seededRandomCity.current = true;
+    dispatch(updateFilters({city}));
+  }, [dispatch, filters.city, filters.keyword, hasSearched]);
 
   useEffect(() => {
     const keyword = filters.keyword.trim();
