@@ -89,30 +89,50 @@ const ExploreScreen = () => {
     }
   }, [isFetching]);
 
+  useEffect(() => {
+    const keyword = filters.keyword.trim();
+    const city = filters.city.trim();
+
+    if (!keyword && !city) {
+      return;
+    }
+
+    const debounceId = setTimeout(() => handleSearch(0, {dismissKeyboard: false}), 400);
+
+    return () => clearTimeout(debounceId);
+  }, [filters.keyword, filters.city, filters.category, handleSearch]);
+
   const handleSearch = useCallback(
-    (page = 0) => {
-      if (searchDisabled) {
+    (page = 0, options?: {dismissKeyboard?: boolean}) => {
+      const keyword = filters.keyword.trim();
+      const city = filters.city.trim();
+
+      if (!keyword && !city) {
         return;
       }
 
-      setHasSearched(true);
       if (page === 0) {
         setEvents([]);
         setHasMoreResults(true);
+        setIsRefreshing(hasSearched);
+      } else {
+        setIsRefreshing(false);
       }
 
-      setIsRefreshing(page === 0 && hasSearched);
+      setHasSearched(true);
 
       triggerSearch({
-        keyword: filters.keyword.trim(),
-        city: filters.city.trim(),
+        keyword,
+        city,
         page,
         classificationName: filters.category ? categoryToClassification[filters.category] : undefined,
       });
 
-      Keyboard.dismiss();
+      if (options?.dismissKeyboard ?? true) {
+        Keyboard.dismiss();
+      }
     },
-    [filters, triggerSearch, searchDisabled, hasSearched],
+    [filters, triggerSearch, hasSearched],
   );
 
   const loadNextPage = useCallback(() => {

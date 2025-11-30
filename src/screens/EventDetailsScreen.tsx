@@ -15,6 +15,7 @@ import {RouteProp, useRoute} from '@react-navigation/native';
 import {GOOGLE_MAPS_API_KEY} from '@env';
 import {useGetEventByIdQuery} from '../api/ticketmasterApi';
 import type {EventVenue, PriceRange} from '../types/events';
+import {useThemeColors, type ThemeColors} from '../theme/colors';
 
 type RootStackParamList = {
   EventDetails: {eventId: string};
@@ -70,27 +71,29 @@ interface InfoRowProps {
   value?: ReactNode;
 }
 
-const InfoRow: React.FC<InfoRowProps> = ({icon, label, value}) => {
-  if (!value) {
-    return null;
-  }
-
-  return (
-    <View style={styles.infoRow}>
-      <MaterialIcons name={icon} size={18} color="#4b5563" style={styles.infoIcon} />
-      <View style={styles.infoTextContainer}>
-        <Text style={styles.infoLabel}>{label}</Text>
-        <Text style={styles.infoValue}>{value}</Text>
-      </View>
-    </View>
-  );
-};
-
 const EventDetailsScreen: React.FC = () => {
   const route = useRoute<EventDetailsRouteProp>();
   const {eventId} = route.params;
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const {data, isLoading, isError, refetch} = useGetEventByIdQuery(eventId);
+
+  const InfoRow: React.FC<InfoRowProps> = ({icon, label, value}) => {
+    if (!value) {
+      return null;
+    }
+
+    return (
+      <View style={styles.infoRow}>
+        <MaterialIcons name={icon} size={18} color={colors.muted} style={styles.infoIcon} />
+        <View style={styles.infoTextContainer}>
+          <Text style={styles.infoLabel}>{label}</Text>
+          <Text style={styles.infoValue}>{value}</Text>
+        </View>
+      </View>
+    );
+  };
 
   const openTickets = useCallback(() => {
     if (data?.ticketUrl) {
@@ -149,7 +152,7 @@ const EventDetailsScreen: React.FC = () => {
   if (isLoading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator />
+        <ActivityIndicator color={colors.primary} />
         <Text style={styles.subtitle}>Loading event...</Text>
       </View>
     );
@@ -167,7 +170,7 @@ const EventDetailsScreen: React.FC = () => {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
       {data.imageUrl ? (
         <Image
           source={{uri: data.imageUrl}}
@@ -223,7 +226,7 @@ const EventDetailsScreen: React.FC = () => {
             </TouchableOpacity>
           ) : (
             <View style={styles.mapPlaceholder}>
-              <MaterialIcons name="map" size={20} color="#6b7280" />
+              <MaterialIcons name="map" size={20} color={colors.muted} />
               <Text style={styles.mapPlaceholderText}>
                 Add GOOGLE_MAPS_API_KEY (.env) to preview the map here.
               </Text>
@@ -264,176 +267,190 @@ const EventDetailsScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  container: {
-    padding: 16,
-    paddingBottom: 32,
-  },
-  heroImage: {
-    width: '100%',
-    height: 220,
-    borderRadius: 16,
-    marginBottom: 16,
-    backgroundColor: '#d1d5db',
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 16,
-  },
-  badge: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#E8F0FF',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 999,
-    marginBottom: 16,
-  },
-  badgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#1F4ED8',
-    textTransform: 'uppercase',
-  },
-  card: {
-    backgroundColor: '#f7f7f8',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  cardSubtitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  cardText: {
-    fontSize: 14,
-    color: '#333',
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginTop: 10,
-  },
-  infoIcon: {
-    marginTop: 2,
-    marginRight: 10,
-  },
-  infoTextContainer: {
-    flex: 1,
-  },
-  infoLabel: {
-    fontSize: 12,
-    textTransform: 'uppercase',
-    color: '#6b7280',
-  },
-  infoValue: {
-    fontSize: 15,
-    color: '#111827',
-    fontWeight: '500',
-  },
-  mapPreviewWrapper: {
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginTop: 12,
-  },
-  mapImage: {
-    width: '100%',
-    height: 220,
-  },
-  mapOverlay: {
-    position: 'absolute',
-    bottom: 12,
-    left: 12,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  mapOverlayText: {
-    color: '#fff',
-    fontSize: 13,
-    marginLeft: 6,
-    fontWeight: '600',
-  },
-  mapPlaceholder: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    padding: 12,
-    marginTop: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  mapPlaceholderText: {
-    marginLeft: 8,
-    color: '#4b5563',
-    flex: 1,
-  },
-  primaryButton: {
-    marginTop: 16,
-    backgroundColor: '#007AFF',
-    paddingVertical: 12,
-    borderRadius: 24,
-    alignItems: 'center',
-  },
-  primaryButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 16,
-  },
-  secondaryButton: {
-    marginTop: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#007AFF',
-    alignSelf: 'flex-start',
-  },
-  secondaryButtonText: {
-    color: '#007AFF',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  additionalInfo: {
-    marginTop: 8,
-  },
-  priceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 4,
-  },
-  priceLabel: {
-    fontSize: 14,
-    color: '#374151',
-    fontWeight: '500',
-  },
-  priceValue: {
-    fontSize: 14,
-    color: '#111827',
-    fontWeight: '600',
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    center: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 24,
+      backgroundColor: colors.background,
+    },
+    container: {
+      padding: 16,
+      paddingBottom: 32,
+      backgroundColor: colors.background,
+    },
+    heroImage: {
+      width: '100%',
+      height: 220,
+      borderRadius: 16,
+      marginBottom: 16,
+      backgroundColor: colors.surface,
+    },
+    title: {
+      fontSize: 22,
+      fontWeight: '700',
+      marginBottom: 4,
+      color: colors.text,
+    },
+    subtitle: {
+      fontSize: 14,
+      color: colors.muted,
+      marginBottom: 16,
+    },
+    badge: {
+      alignSelf: 'flex-start',
+      backgroundColor: `${colors.primary}1A`,
+      paddingHorizontal: 12,
+      paddingVertical: 4,
+      borderRadius: 999,
+      marginBottom: 16,
+    },
+    badgeText: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.primary,
+      textTransform: 'uppercase',
+    },
+    card: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      padding: 12,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    cardTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      marginBottom: 4,
+      color: colors.text,
+    },
+    cardSubtitle: {
+      fontSize: 14,
+      fontWeight: '600',
+      marginTop: 12,
+      marginBottom: 4,
+      color: colors.text,
+    },
+    cardText: {
+      fontSize: 14,
+      color: colors.text,
+    },
+    infoRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      marginTop: 10,
+    },
+    infoIcon: {
+      marginTop: 2,
+      marginRight: 10,
+    },
+    infoTextContainer: {
+      flex: 1,
+    },
+    infoLabel: {
+      fontSize: 12,
+      textTransform: 'uppercase',
+      color: colors.muted,
+    },
+    infoValue: {
+      fontSize: 15,
+      color: colors.text,
+      fontWeight: '500',
+    },
+    mapPreviewWrapper: {
+      borderRadius: 12,
+      overflow: 'hidden',
+      marginTop: 12,
+      backgroundColor: colors.surface,
+    },
+    mapImage: {
+      width: '100%',
+      height: 220,
+    },
+    mapOverlay: {
+      position: 'absolute',
+      bottom: 12,
+      left: 12,
+      backgroundColor: 'rgba(0,0,0,0.6)',
+      borderRadius: 999,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    mapOverlayText: {
+      color: '#fff',
+      fontSize: 13,
+      marginLeft: 6,
+      fontWeight: '600',
+    },
+    mapPlaceholder: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      padding: 12,
+      marginTop: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    mapPlaceholderText: {
+      marginLeft: 8,
+      color: colors.muted,
+      flex: 1,
+    },
+    primaryButton: {
+      marginTop: 16,
+      backgroundColor: colors.primary,
+      paddingVertical: 12,
+      borderRadius: 24,
+      alignItems: 'center',
+    },
+    primaryButtonText: {
+      color: '#fff',
+      fontWeight: '600',
+      fontSize: 16,
+    },
+    secondaryButton: {
+      marginTop: 8,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: colors.primary,
+      alignSelf: 'flex-start',
+    },
+    secondaryButtonText: {
+      color: colors.primary,
+      fontSize: 14,
+      fontWeight: '500',
+    },
+    additionalInfo: {
+      marginTop: 8,
+    },
+    priceRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: 4,
+    },
+    priceLabel: {
+      fontSize: 14,
+      color: colors.muted,
+      fontWeight: '500',
+    },
+    priceValue: {
+      fontSize: 14,
+      color: colors.text,
+      fontWeight: '600',
+    },
+  });
 
 export default EventDetailsScreen;
