@@ -1,7 +1,3 @@
-/**
- * Root App
- * Wires: Gesture handler + Safe area + Redux + Navigation
- */
 
 import React from 'react';
 import {StatusBar} from 'react-native';
