@@ -11,8 +11,6 @@ import type {
 
 const BASE_URL = 'https://app.ticketmaster.com/discovery/v2';
 
-// Some environments are failing to inject the env var at runtime.
-// To keep the app functional, we fall back to the known key if needed.
 const API_KEY = (TICKETMASTER_API_KEY || 'nw1Nn0ykN3p8ZdZQnvGHnP92Ik0WeLtC').trim();
 
 interface TicketmasterImage {
